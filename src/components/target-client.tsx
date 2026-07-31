@@ -1,12 +1,12 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, PiggyBank } from "lucide-react";
+import { Plus, X, PiggyBank, Pencil, Trash2 } from "lucide-react";
 import { formatRupiah, formatPercent, parseRupiahInput } from "@/lib/format";
 import { fmtTanggal, daysUntil, todayISO } from "@/lib/dates";
 import { colorHex } from "@/lib/colors";
 import { Card, ProgressBar, EmptyState, Badge } from "@/components/ui";
-import { simpanTarget, setorTarget } from "@/lib/actions";
+import { simpanTarget, setorTarget, hapusTarget } from "@/lib/actions";
 
 type Goal = { id: number; nama: string; jumlahTarget: number; terkumpul: number; tanggalTarget: string | null; warna: string; status: string; perBulan: number };
 type WOpt = { id: number; nama: string };
@@ -14,7 +14,14 @@ type WOpt = { id: number; nama: string };
 export function TargetClient({ secret, goals, wallets }: { secret: string; goals: Goal[]; wallets: WOpt[] }) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
+  const [edit, setEdit] = useState<null | Goal>(null);
   const [setor, setSetor] = useState<null | Goal>(null);
+  const [pending, start] = useTransition();
+
+  function del(g: Goal) {
+    if (!confirm(`Hapus target "${g.nama}"? Setoran yang sudah tercatat sebagai transaksi tetap ada di halaman Transaksi.`)) return;
+    start(async () => { await hapusTarget(g.id); router.refresh(); });
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -31,7 +38,11 @@ export function TargetClient({ secret, goals, wallets }: { secret: string; goals
               <Card key={g.id} style={{ borderTopColor: colorHex(g.warna), borderTopWidth: 3 } as any}>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="font-semibold">{g.nama}</span>
-                  {g.status === "tercapai" ? <Badge tone="income">Tercapai 🎉</Badge> : dd !== null && <Badge tone={dd < 0 ? "expense" : "muted"}>{dd < 0 ? "Lewat tempo" : `${dd} hari lagi`}</Badge>}
+                  <div className="flex items-center gap-1.5">
+                    {g.status === "tercapai" ? <Badge tone="income">Tercapai 🎉</Badge> : dd !== null && <Badge tone={dd < 0 ? "expense" : "muted"}>{dd < 0 ? "Lewat tempo" : `${dd} hari lagi`}</Badge>}
+                    <button aria-label="Ubah" onClick={() => setEdit(g)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil size={14} /></button>
+                    <button aria-label="Hapus" onClick={() => del(g)} className="rounded p-1 text-expense hover:bg-expense/10"><Trash2 size={14} /></button>
+                  </div>
                 </div>
                 <p className="tnum font-display text-xl font-bold">{formatRupiah(g.terkumpul)}<span className="text-sm font-normal text-muted-foreground"> / {formatRupiah(g.jumlahTarget)}</span></p>
                 <div className="mt-2"><ProgressBar value={pct} tone="primary" /></div>
@@ -47,25 +58,29 @@ export function TargetClient({ secret, goals, wallets }: { secret: string; goals
         </div>
       ) : <EmptyState title="Belum ada target" desc="Buat target menabung, misal 'Dana Darurat' atau 'Liburan'." action={<button onClick={() => setAddOpen(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Buat target</button>} />}
 
-      {addOpen && <AddGoal onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); router.refresh(); }} />}
+      {addOpen && <GoalForm onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); router.refresh(); }} />}
+      {edit && <GoalForm edit={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); router.refresh(); }} />}
       {setor && <Setor goal={setor} wallets={wallets} onClose={() => setSetor(null)} onDone={() => { setSetor(null); router.refresh(); }} />}
     </div>
   );
 }
-function AddGoal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [nama, setNama] = useState(""); const [target, setTarget] = useState(0); const [tgl, setTgl] = useState("");
-  const [warna, setWarna] = useState("violet"); const [err, setErr] = useState(""); const [pending, start] = useTransition();
+function GoalForm({ edit, onClose, onDone }: { edit?: Goal; onClose: () => void; onDone: () => void }) {
+  const [nama, setNama] = useState(edit?.nama ?? "");
+  const [target, setTarget] = useState(edit?.jumlahTarget ?? 0);
+  const [tgl, setTgl] = useState(edit?.tanggalTarget ?? "");
+  const [warna, setWarna] = useState(edit?.warna ?? "violet");
+  const [err, setErr] = useState(""); const [pending, start] = useTransition();
   const colors = ["violet", "emerald", "amber", "sky", "pink", "teal"];
   function save() {
     start(async () => {
-      const res = await simpanTarget({ nama, jumlahTarget: target, tanggalTarget: tgl || null, warna, walletId: null });
+      const res = await simpanTarget({ nama, jumlahTarget: target, tanggalTarget: tgl || null, warna, walletId: null }, edit?.id);
       if (res.ok) onDone(); else setErr(res.error);
     });
   }
   return (
-    <ModalT title="Buat Target" onClose={onClose}>
+    <ModalT title={edit ? "Ubah Target" : "Buat Target"} onClose={onClose}>
       <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Nama target" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      <input inputMode="numeric" onChange={(e) => setTarget(parseRupiahInput(e.target.value))} placeholder="Jumlah target (Rp)" className="tnum mt-3 w-full rounded-md border bg-background px-3 py-2 text-lg font-semibold" />
+      <input inputMode="numeric" defaultValue={edit?.jumlahTarget || ""} onChange={(e) => setTarget(parseRupiahInput(e.target.value))} placeholder="Jumlah target (Rp)" className="tnum mt-3 w-full rounded-md border bg-background px-3 py-2 text-lg font-semibold" />
       <label className="mt-3 block text-xs text-muted-foreground">Target tanggal (opsional)<input type="date" value={tgl} onChange={(e) => setTgl(e.target.value)} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" /></label>
       <div className="mt-3 flex gap-2">{colors.map((c) => <button key={c} onClick={() => setWarna(c)} className={`h-8 w-8 rounded-full ${warna === c ? "ring-2 ring-offset-2 ring-offset-card" : ""}`} style={{ background: colorHex(c) }} />)}</div>
       {err && <p className="mt-2 text-sm text-expense">{err}</p>}

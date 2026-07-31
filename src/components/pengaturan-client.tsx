@@ -2,11 +2,11 @@
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Copy, Check, Plus, X, Archive, Download, Upload, Wallet2, Tag, ShieldCheck, Palette, CalendarClock } from "lucide-react";
+import { Copy, Check, Plus, X, Archive, ArchiveRestore, Download, Upload, Wallet2, Tag, ShieldCheck, Palette, CalendarClock, Pencil, Trash2 } from "lucide-react";
 import { formatRupiah, parseRupiahInput } from "@/lib/format";
 import { colorHex } from "@/lib/colors";
 import { Card, SectionTitle, Badge } from "@/components/ui";
-import { simpanWallet, arsipkanWallet, simpanKategori, simpanPengaturan, restoreBackup } from "@/lib/actions";
+import { simpanWallet, arsipkanWallet, simpanKategori, hapusKategori, setArsipKategori, simpanPengaturan, restoreBackup } from "@/lib/actions";
 
 type W = { id: number; nama: string; tipe: string; saldoAwal: number; warna: string; isArchived: boolean };
 type C = { id: number; nama: string; tipe: string; warna: string; isArchived: boolean };
@@ -26,7 +26,8 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
   const { theme, setTheme } = useTheme();
   const [copied, setCopied] = useState(false);
   const [wEdit, setWEdit] = useState<null | Partial<W>>(null);
-  const [cAdd, setCAdd] = useState<null | { tipe: string }>(null);
+  const [cForm, setCForm] = useState<null | { id?: number; tipe: string; nama: string; warna: string }>(null);
+  const [showArsip, setShowArsip] = useState(false);
   const [awal, setAwal] = useState(settings.awalPeriodeBulan);
   const [pinAktif, setPinAktif] = useState(settings.pinAktif);
   const [pin, setPin] = useState("");
@@ -42,10 +43,22 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
       setWEdit(null); router.refresh();
     });
   }
-  function saveCat(nama: string, warna: string) {
-    if (!cAdd || !nama) return;
-    start(async () => { await simpanKategori({ nama, tipe: cAdd.tipe as any, warna, ikon: "tag" }); setCAdd(null); router.refresh(); });
+  function saveCat() {
+    if (!cForm || !cForm.nama) return;
+    start(async () => {
+      await simpanKategori({ nama: cForm.nama, tipe: cForm.tipe as any, warna: cForm.warna, ikon: "tag" }, cForm.id);
+      setCForm(null); router.refresh();
+    });
   }
+  function delCat(c: C) {
+    if (!confirm(`Hapus kategori "${c.nama}"? Jika sudah pernah dipakai transaksi, kategori akan diarsipkan (disembunyikan) agar riwayat tetap aman.`)) return;
+    start(async () => {
+      const res = await hapusKategori(c.id);
+      setMsg(res.ok && (res as any).archived ? `Kategori "${c.nama}" diarsipkan karena masih dipakai riwayat.` : `Kategori "${c.nama}" dihapus.`);
+      router.refresh();
+    });
+  }
+  function restoreCat(c: C) { start(async () => { await setArsipKategori(c.id, false); router.refresh(); }); }
   function savePeriode() { start(async () => { await simpanPengaturan({ awalPeriodeBulan: awal }); setMsg("Awal periode disimpan."); router.refresh(); }); }
   async function togglePin(on: boolean) {
     if (on && pin.length !== 6) { setMsg("PIN harus 6 digit."); return; }
@@ -60,12 +73,13 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
     reader.readAsText(f);
   }
 
+  const arsipCats = categories.filter((c) => c.isArchived);
+
   return (
     <div className="space-y-5 animate-fade-in">
       <h1 className="font-display text-2xl font-bold">Pengaturan</h1>
       {msg && <div className="rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary">{msg}</div>}
 
-      {/* URL rahasia */}
       <section>
         <SectionTitle>URL Rahasia</SectionTitle>
         <Card>
@@ -77,7 +91,6 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
         </Card>
       </section>
 
-      {/* Tampilan */}
       <section>
         <SectionTitle>Tampilan</SectionTitle>
         <Card className="flex items-center justify-between">
@@ -88,7 +101,6 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
         </Card>
       </section>
 
-      {/* Periode */}
       <section>
         <SectionTitle>Awal Periode Bulan</SectionTitle>
         <Card className="flex items-center justify-between">
@@ -100,7 +112,6 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
         </Card>
       </section>
 
-      {/* Dompet */}
       <section>
         <SectionTitle aksi={<button onClick={() => setWEdit({})} className="flex items-center gap-1 text-sm font-medium text-primary"><Plus size={14} /> Tambah</button>}><span className="flex items-center gap-1.5"><Wallet2 size={14} /> Dompet</span></SectionTitle>
         <Card className="divide-y p-0">
@@ -115,22 +126,46 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
         </Card>
       </section>
 
-      {/* Kategori */}
       <section>
         <SectionTitle><span className="flex items-center gap-1.5"><Tag size={14} /> Kategori</span></SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2">
           {(["expense", "income"] as const).map((tp) => (
-            <Card key={tp}>
-              <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">{tp === "expense" ? "Pengeluaran" : "Pemasukan"}</p><button onClick={() => setCAdd({ tipe: tp })} className="text-sm font-medium text-primary"><Plus size={14} /></button></div>
-              <div className="flex flex-wrap gap-1.5">
-                {categories.filter((c) => c.tipe === tp && !c.isArchived).map((c) => <span key={c.id} className="rounded-full px-2.5 py-1 text-xs" style={{ background: `${colorHex(c.warna)}22`, color: colorHex(c.warna) }}>{c.nama}</span>)}
+            <Card key={tp} className="p-0">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-sm font-semibold">{tp === "expense" ? "Pengeluaran" : "Pemasukan"}</p>
+                <button onClick={() => setCForm({ tipe: tp, nama: "", warna: "violet" })} className="flex items-center gap-1 text-sm font-medium text-primary"><Plus size={14} /> Tambah</button>
+              </div>
+              <div className="divide-y border-t">
+                {categories.filter((c) => c.tipe === tp && !c.isArchived).map((c) => (
+                  <div key={c.id} className="group flex items-center gap-2 px-4 py-2">
+                    <i className="h-2.5 w-2.5 rounded-full" style={{ background: colorHex(c.warna) }} />
+                    <span className="flex-1 text-sm">{c.nama}</span>
+                    <button aria-label="Ubah" onClick={() => setCForm({ id: c.id, tipe: c.tipe, nama: c.nama, warna: c.warna })} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil size={13} /></button>
+                    <button aria-label="Hapus" onClick={() => delCat(c)} className="rounded p-1 text-expense hover:bg-expense/10"><Trash2 size={13} /></button>
+                  </div>
+                ))}
               </div>
             </Card>
           ))}
         </div>
+        {arsipCats.length > 0 && (
+          <div className="mt-3">
+            <button onClick={() => setShowArsip((v) => !v)} className="text-xs font-medium text-muted-foreground hover:text-foreground">{showArsip ? "Sembunyikan" : "Lihat"} kategori diarsipkan ({arsipCats.length})</button>
+            {showArsip && (
+              <Card className="mt-2 divide-y p-0">
+                {arsipCats.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2 px-4 py-2">
+                    <i className="h-2.5 w-2.5 rounded-full opacity-50" style={{ background: colorHex(c.warna) }} />
+                    <span className="flex-1 text-sm text-muted-foreground">{c.nama} <Badge>{c.tipe === "expense" ? "pengeluaran" : "pemasukan"}</Badge></span>
+                    <button onClick={() => restoreCat(c)} className="flex items-center gap-1 rounded p-1 text-xs font-medium text-primary hover:bg-primary/10"><ArchiveRestore size={13} /> Pulihkan</button>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </div>
+        )}
       </section>
 
-      {/* PIN */}
       <section>
         <SectionTitle><span className="flex items-center gap-1.5"><ShieldCheck size={14} /> Kunci PIN (opsional)</span></SectionTitle>
         <Card>
@@ -144,7 +179,6 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
         </Card>
       </section>
 
-      {/* Backup */}
       <section>
         <SectionTitle>Backup Data</SectionTitle>
         <Card className="flex flex-wrap gap-2">
@@ -163,18 +197,14 @@ export function PengaturanClient({ secret, url, wallets, categories, settings }:
           <button onClick={saveWallet} disabled={pending || !wEdit.nama} className="mt-4 w-full rounded-lg bg-primary py-2.5 font-semibold text-primary-foreground disabled:opacity-50">Simpan</button>
         </ModalP>
       )}
-      {cAdd && <CatModal tipe={cAdd.tipe} onClose={() => setCAdd(null)} onSave={saveCat} />}
+      {cForm && (
+        <ModalP title={`${cForm.id ? "Ubah" : "Tambah"} Kategori ${cForm.tipe === "expense" ? "Pengeluaran" : "Pemasukan"}`} onClose={() => setCForm(null)}>
+          <input defaultValue={cForm.nama} onChange={(e) => setCForm({ ...cForm, nama: e.target.value })} placeholder="Nama kategori" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+          <div className="mt-3 flex flex-wrap gap-2">{COLORS.map((c) => <button key={c} onClick={() => setCForm({ ...cForm, warna: c })} className={`h-7 w-7 rounded-full ${cForm.warna === c ? "ring-2 ring-offset-2 ring-offset-card" : ""}`} style={{ background: colorHex(c) }} />)}</div>
+          <button onClick={saveCat} disabled={pending || !cForm.nama} className="mt-4 w-full rounded-lg bg-primary py-2.5 font-semibold text-primary-foreground disabled:opacity-50">Simpan</button>
+        </ModalP>
+      )}
     </div>
-  );
-}
-function CatModal({ tipe, onClose, onSave }: { tipe: string; onClose: () => void; onSave: (nama: string, warna: string) => void }) {
-  const [nama, setNama] = useState(""); const [warna, setWarna] = useState("violet");
-  return (
-    <ModalP title={`Tambah Kategori ${tipe === "expense" ? "Pengeluaran" : "Pemasukan"}`} onClose={onClose}>
-      <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Nama kategori" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      <div className="mt-3 flex flex-wrap gap-2">{COLORS.map((c) => <button key={c} onClick={() => setWarna(c)} className={`h-7 w-7 rounded-full ${warna === c ? "ring-2 ring-offset-2 ring-offset-card" : ""}`} style={{ background: colorHex(c) }} />)}</div>
-      <button onClick={() => onSave(nama, warna)} disabled={!nama} className="mt-4 w-full rounded-lg bg-primary py-2.5 font-semibold text-primary-foreground disabled:opacity-50">Simpan</button>
-    </ModalP>
   );
 }
 function ModalP({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {

@@ -235,3 +235,46 @@ export async function restoreBackup(json: string): Promise<Result> {
   revAll();
   return { ok: true };
 }
+
+// ---------------- Hapus/Arsip Kategori ----------------
+export async function hapusKategori(id: number): Promise<Result & { archived?: boolean }> {
+  await wajibSecret();
+  const db = getDb();
+  const dipakaiTx = await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.categoryId, id)).limit(1);
+  const dipakaiBudget = await db.select({ id: budgets.id }).from(budgets).where(eq(budgets.categoryId, id)).limit(1);
+  if (dipakaiTx.length > 0 || dipakaiBudget.length > 0) {
+    // Masih dipakai riwayat -> arsipkan agar data lama tidak rusak.
+    await db.update(categories).set({ isArchived: true }).where(eq(categories.id, id));
+    revAll();
+    return { ok: true, archived: true };
+  }
+  await db.delete(categories).where(eq(categories.id, id));
+  revAll();
+  return { ok: true };
+}
+export async function setArsipKategori(id: number, arsip: boolean): Promise<Result> {
+  await wajibSecret();
+  await getDb().update(categories).set({ isArchived: arsip }).where(eq(categories.id, id));
+  revAll();
+  return { ok: true };
+}
+
+// ---------------- Hapus Target ----------------
+export async function hapusTarget(id: number): Promise<Result> {
+  await wajibSecret();
+  const db = getDb();
+  await db.delete(goalContributions).where(eq(goalContributions.goalId, id));
+  await db.delete(savingsGoals).where(eq(savingsGoals.id, id));
+  revAll();
+  return { ok: true };
+}
+
+// ---------------- Hapus Hutang/Piutang ----------------
+export async function hapusHutang(id: number): Promise<Result> {
+  await wajibSecret();
+  const db = getDb();
+  await db.delete(debtPayments).where(eq(debtPayments.debtId, id));
+  await db.delete(debts).where(eq(debts.id, id));
+  revAll();
+  return { ok: true };
+}

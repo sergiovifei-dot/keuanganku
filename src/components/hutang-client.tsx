@@ -1,11 +1,11 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Plus, X, Wallet, AlertTriangle, CheckCircle2, Pencil, Trash2 } from "lucide-react";
 import { formatRupiah, parseRupiahInput } from "@/lib/format";
 import { fmtTanggal, daysUntil, todayISO } from "@/lib/dates";
 import { Card, ProgressBar, Badge, EmptyState } from "@/components/ui";
-import { simpanHutang, bayarHutang } from "@/lib/actions";
+import { simpanHutang, bayarHutang, hapusHutang } from "@/lib/actions";
 
 type Item = {
   id: number; tipe: "hutang" | "piutang"; namaPihak: string; jumlahPokok: number; terbayar: number;
@@ -19,11 +19,17 @@ export function HutangClient({ secret, items, wallets }: { secret: string; items
   const router = useRouter();
   const [tab, setTab] = useState<"hutang" | "piutang">("hutang");
   const [addOpen, setAddOpen] = useState(false);
+  const [edit, setEdit] = useState<null | Item>(null);
   const [payOpen, setPayOpen] = useState<null | Item>(null);
   const [pending, start] = useTransition();
 
   const list = items.filter((i) => i.tipe === tab);
   const totalOut = list.filter((i) => i.status !== "lunas").reduce((a, i) => a + i.outstanding, 0);
+
+  function del(i: Item) {
+    if (!confirm(`Hapus data "${i.namaPihak}"? Transaksi pembayaran yang sudah tercatat tetap ada di halaman Transaksi.`)) return;
+    start(async () => { await hapusHutang(i.id); router.refresh(); });
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -43,7 +49,6 @@ export function HutangClient({ secret, items, wallets }: { secret: string; items
         <p className={`tnum mt-1 font-display text-2xl font-bold ${tab === "hutang" ? "text-expense" : "text-income"}`}>{formatRupiah(totalOut)}</p>
       </Card>
 
-      {/* Aging */}
       <Card>
         <p className="mb-2 font-display text-sm font-semibold">Aging</p>
         <div className="grid grid-cols-5 gap-1 text-center">
@@ -67,9 +72,13 @@ export function HutangClient({ secret, items, wallets }: { secret: string; items
                     <p className="font-semibold">{i.namaPihak}</p>
                     <p className="text-xs text-muted-foreground">Mulai {fmtTanggal(i.tanggalMulai)}{i.tanggalJatuhTempo ? ` · Jatuh tempo ${fmtTanggal(i.tanggalJatuhTempo)}` : ""}</p>
                   </div>
-                  {i.status === "lunas" ? <Badge tone="income"><CheckCircle2 size={12} className="mr-1" /> Lunas</Badge>
-                    : due7 ? <Badge tone="warn"><AlertTriangle size={12} className="mr-1" /> {dd === 0 ? "Hari ini" : `${dd} hari`}</Badge>
-                    : <Badge tone="muted">{i.status}</Badge>}
+                  <div className="flex items-center gap-1.5">
+                    {i.status === "lunas" ? <Badge tone="income"><CheckCircle2 size={12} className="mr-1" /> Lunas</Badge>
+                      : due7 ? <Badge tone="warn"><AlertTriangle size={12} className="mr-1" /> {dd === 0 ? "Hari ini" : `${dd} hari`}</Badge>
+                      : <Badge tone="muted">{i.status}</Badge>}
+                    <button aria-label="Ubah" onClick={() => setEdit(i)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil size={14} /></button>
+                    <button aria-label="Hapus" onClick={() => del(i)} className="rounded p-1 text-expense hover:bg-expense/10"><Trash2 size={14} /></button>
+                  </div>
                 </div>
                 <ProgressBar value={pct} tone={i.tipe === "hutang" ? "expense" : "income"} />
                 <div className="mt-2 flex justify-between text-xs text-muted-foreground">
@@ -83,30 +92,31 @@ export function HutangClient({ secret, items, wallets }: { secret: string; items
         </div>
       ) : <EmptyState title={`Belum ada ${tab}`} desc="Catat hutang atau piutang agar tidak lupa jatuh tempo." action={<button onClick={() => setAddOpen(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Tambah</button>} />}
 
-      {addOpen && <AddDebt secret={secret} defTipe={tab} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); router.refresh(); }} />}
+      {addOpen && <DebtForm defTipe={tab} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); router.refresh(); }} />}
+      {edit && <DebtForm edit={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); router.refresh(); }} />}
       {payOpen && <PayDebt item={payOpen} wallets={wallets} onClose={() => setPayOpen(null)} onDone={() => { setPayOpen(null); router.refresh(); }} />}
     </div>
   );
 }
 
-function AddDebt({ secret, defTipe, onClose, onDone }: { secret: string; defTipe: "hutang" | "piutang"; onClose: () => void; onDone: () => void }) {
-  const [tipe, setTipe] = useState(defTipe);
-  const [nama, setNama] = useState(""); const [pokok, setPokok] = useState(0);
-  const [mulai, setMulai] = useState(todayISO()); const [jt, setJt] = useState("");
+function DebtForm({ edit, defTipe, onClose, onDone }: { edit?: Item; defTipe?: "hutang" | "piutang"; onClose: () => void; onDone: () => void }) {
+  const [tipe, setTipe] = useState<"hutang" | "piutang">(edit?.tipe ?? defTipe ?? "hutang");
+  const [nama, setNama] = useState(edit?.namaPihak ?? ""); const [pokok, setPokok] = useState(edit?.jumlahPokok ?? 0);
+  const [mulai, setMulai] = useState(edit?.tanggalMulai ?? todayISO()); const [jt, setJt] = useState(edit?.tanggalJatuhTempo ?? "");
   const [err, setErr] = useState(""); const [pending, start] = useTransition();
   function save() {
     start(async () => {
-      const res = await simpanHutang({ tipe, namaPihak: nama, jumlahPokok: pokok, tanggalMulai: mulai, tanggalJatuhTempo: jt || null, catatan: "" });
+      const res = await simpanHutang({ tipe, namaPihak: nama, jumlahPokok: pokok, tanggalMulai: mulai, tanggalJatuhTempo: jt || null, catatan: edit?.catatan ?? "" }, edit?.id);
       if (res.ok) onDone(); else setErr(res.error);
     });
   }
   return (
-    <Modal title="Tambah Hutang/Piutang" onClose={onClose}>
+    <Modal title={edit ? "Ubah Hutang/Piutang" : "Tambah Hutang/Piutang"} onClose={onClose}>
       <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 text-sm">
         {(["hutang", "piutang"] as const).map((t) => <button key={t} onClick={() => setTipe(t)} className={`rounded-md py-1.5 capitalize ${tipe === t ? "bg-card shadow-sm" : "text-muted-foreground"}`}>{t}</button>)}
       </div>
       <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Nama pihak" className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      <input inputMode="numeric" onChange={(e) => setPokok(parseRupiahInput(e.target.value))} placeholder="Jumlah pokok (Rp)" className="tnum mt-3 w-full rounded-md border bg-background px-3 py-2 text-lg font-semibold" />
+      <input inputMode="numeric" defaultValue={edit?.jumlahPokok || ""} onChange={(e) => setPokok(parseRupiahInput(e.target.value))} placeholder="Jumlah pokok (Rp)" className="tnum mt-3 w-full rounded-md border bg-background px-3 py-2 text-lg font-semibold" />
       <div className="mt-3 grid grid-cols-2 gap-2">
         <label className="text-xs text-muted-foreground">Mulai<input type="date" value={mulai} onChange={(e) => setMulai(e.target.value)} className="mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-sm" /></label>
         <label className="text-xs text-muted-foreground">Jatuh tempo<input type="date" value={jt} onChange={(e) => setJt(e.target.value)} className="mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-sm" /></label>
