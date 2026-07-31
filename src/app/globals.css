@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 33% 98%;
+  --foreground: 240 30% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 30% 12%;
+  --muted: 240 20% 94%;
+  --muted-foreground: 240 8% 46%;
+  --primary: 256 90% 66%;          /* violet accent */
+  --primary-foreground: 0 0% 100%;
+  --border: 240 18% 90%;
+  --input: 240 18% 90%;
+  --ring: 256 90% 66%;
+  --income: 152 62% 42%;           /* emerald */
+  --expense: 0 78% 60%;            /* red */
+  --transfer: 220 12% 52%;         /* neutral slate */
+  --c1: 256 90% 66%; --c2: 152 62% 42%; --c3: 32 95% 55%;
+  --c4: 199 89% 52%; --c5: 330 81% 60%; --c6: 172 66% 45%;
+  --c7: 24 95% 58%;  --c8: 84 70% 47%;
+}
+.dark {
+  --background: 240 30% 8%;
+  --foreground: 240 20% 96%;
+  --card: 240 26% 13%;
+  --card-foreground: 240 20% 96%;
+  --muted: 240 20% 20%;
+  --muted-foreground: 240 12% 66%;
+  --primary: 256 95% 74%;
+  --primary-foreground: 240 30% 10%;
+  --border: 240 18% 22%;
+  --input: 240 18% 24%;
+  --ring: 256 95% 74%;
+  --income: 152 60% 52%;
+  --expense: 0 84% 68%;
+  --transfer: 220 12% 62%;
+  --c1: 256 95% 74%; --c2: 152 60% 52%; --c3: 32 95% 60%;
+  --c4: 199 89% 60%; --c5: 330 85% 68%; --c6: 172 66% 55%;
+  --c7: 24 95% 63%;  --c8: 84 70% 55%;
+}
+
+* { border-color: hsl(var(--border)); }
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv11", "ss01";
+  -webkit-tap-highlight-color: transparent;
+}
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.skeleton { position: relative; overflow: hidden; background: hsl(var(--muted)); }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, hsl(var(--card) / 0.55), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 8px; }
