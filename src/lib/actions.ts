@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { wajibSecret, appSecret } from "@/lib/auth";
 import {
   transaksiSchema, walletSchema, kategoriSchema, anggaranSchema,
@@ -163,9 +163,30 @@ export async function simpanTarget(raw: unknown, id?: number): Promise<Result> {
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Data tidak valid" };
   const d = p.data;
   const db = getDb();
-  const val = { ...d, tanggalTarget: d.tanggalTarget ?? null, walletId: d.walletId ?? null };
-  if (id) await db.update(savingsGoals).set(val).where(eq(savingsGoals.id, id));
-  else await db.insert(savingsGoals).values(val);
+  const goalVal = {
+    nama: d.nama, jumlahTarget: d.jumlahTarget, tanggalTarget: d.tanggalTarget ?? null,
+    warna: d.warna, ikon: d.ikon,
+  };
+  if (id) {
+    // Pastikan target punya dompet terhubung (buat bila belum ada; kalau ada, samakan nama & warnanya).
+    const existing = (await db.select().from(savingsGoals).where(eq(savingsGoals.id, id)))[0];
+    let walletId = existing?.walletId ?? null;
+    if (!walletId) {
+      const created = await db.insert(wallets)
+        .values({ nama: d.nama, tipe: "investasi", warna: d.warna, ikon: "piggy-bank" })
+        .returning({ id: wallets.id });
+      walletId = created[0].id;
+    } else {
+      await db.update(wallets).set({ nama: d.nama, warna: d.warna }).where(eq(wallets.id, walletId));
+    }
+    await db.update(savingsGoals).set({ ...goalVal, walletId }).where(eq(savingsGoals.id, id));
+  } else {
+    // Target baru -> otomatis buat dompet khusus untuk menabung ke target ini.
+    const created = await db.insert(wallets)
+      .values({ nama: d.nama, tipe: "investasi", warna: d.warna, ikon: "piggy-bank" })
+      .returning({ id: wallets.id });
+    await db.insert(savingsGoals).values({ ...goalVal, walletId: created[0].id });
+  }
   revAll();
   return { ok: true };
 }
@@ -263,8 +284,15 @@ export async function setArsipKategori(id: number, arsip: boolean): Promise<Resu
 export async function hapusTarget(id: number): Promise<Result> {
   await wajibSecret();
   const db = getDb();
+  const goal = (await db.select().from(savingsGoals).where(eq(savingsGoals.id, id)))[0];
   await db.delete(goalContributions).where(eq(goalContributions.goalId, id));
   await db.delete(savingsGoals).where(eq(savingsGoals.id, id));
+  // Dompet target: hapus bila kosong (belum pernah dipakai transaksi); jika sudah ada uang/mutasi, biarkan tetap ada agar saldo tidak hilang.
+  if (goal?.walletId) {
+    const used = await db.select({ id: transactions.id }).from(transactions)
+      .where(or(eq(transactions.walletId, goal.walletId), eq(transactions.walletTujuanId, goal.walletId))).limit(1);
+    if (used.length === 0) await db.delete(wallets).where(eq(wallets.id, goal.walletId));
+  }
   revAll();
   return { ok: true };
 }

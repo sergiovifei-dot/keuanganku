@@ -16,7 +16,7 @@ export default async function TargetPage({ params }: { params: Promise<{ secret:
     const dd = x.tanggalTarget ? Math.max(0, daysUntil(String(x.tanggalTarget))) : 0;
     return {
       id: x.id, nama: x.nama, jumlahTarget: x.jumlahTarget, terkumpul, tanggalTarget: x.tanggalTarget ? String(x.tanggalTarget) : null,
-      warna: x.warna, status: x.status, perBulan: x.tanggalTarget ? targetPerBulan(sisa, dd) : 0,
+      warna: x.warna, status: x.status, perBulan: x.tanggalTarget ? targetPerBulan(sisa, dd) : 0, walletId: x.walletId,
     };
   });
   const wOpts = wallets.filter((w) => !w.isArchived).map((w) => ({ id: w.id, nama: w.nama }));

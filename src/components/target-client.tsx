@@ -8,7 +8,7 @@ import { colorHex } from "@/lib/colors";
 import { Card, ProgressBar, EmptyState, Badge } from "@/components/ui";
 import { simpanTarget, setorTarget, hapusTarget } from "@/lib/actions";
 
-type Goal = { id: number; nama: string; jumlahTarget: number; terkumpul: number; tanggalTarget: string | null; warna: string; status: string; perBulan: number };
+type Goal = { id: number; nama: string; jumlahTarget: number; terkumpul: number; tanggalTarget: string | null; warna: string; status: string; perBulan: number; walletId: number | null };
 type WOpt = { id: number; nama: string };
 
 export function TargetClient({ secret, goals, wallets }: { secret: string; goals: Goal[]; wallets: WOpt[] }) {
@@ -89,7 +89,8 @@ function GoalForm({ edit, onClose, onDone }: { edit?: Goal; onClose: () => void;
   );
 }
 function Setor({ goal, wallets, onClose, onDone }: { goal: Goal; wallets: WOpt[]; onClose: () => void; onDone: () => void }) {
-  const [jumlah, setJumlah] = useState(0); const [walletId, setWalletId] = useState(wallets[0]?.id ?? 0);
+  const opsi = wallets.filter((w) => w.id !== goal.walletId);
+  const [jumlah, setJumlah] = useState(0); const [walletId, setWalletId] = useState(opsi[0]?.id ?? 0);
   const [tanggal, setTanggal] = useState(todayISO()); const [err, setErr] = useState(""); const [pending, start] = useTransition();
   function save() {
     start(async () => {
@@ -100,7 +101,8 @@ function Setor({ goal, wallets, onClose, onDone }: { goal: Goal; wallets: WOpt[]
   return (
     <ModalT title={`Setor — ${goal.nama}`} onClose={onClose}>
       <input inputMode="numeric" onChange={(e) => setJumlah(parseRupiahInput(e.target.value))} placeholder="Jumlah setor (Rp)" className="tnum w-full rounded-md border bg-background px-3 py-2 text-lg font-semibold" />
-      <select value={walletId} onChange={(e) => setWalletId(Number(e.target.value))} className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm">{wallets.map((w) => <option key={w.id} value={w.id}>{w.nama}</option>)}</select>
+      <select value={walletId} onChange={(e) => setWalletId(Number(e.target.value))} className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm">{opsi.map((w) => <option key={w.id} value={w.id}>{w.nama}</option>)}</select>
+      <p className="mt-2 text-xs text-muted-foreground">Uang dipindahkan dari dompet di atas ke dompet target <b>{goal.nama}</b> (tercatat sebagai transfer).</p>
       <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm" />
       {err && <p className="mt-2 text-sm text-expense">{err}</p>}
       <button onClick={save} disabled={pending || jumlah <= 0} className="mt-4 w-full rounded-lg bg-primary py-2.5 font-semibold text-primary-foreground disabled:opacity-50">Simpan</button>
