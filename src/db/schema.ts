@@ -36,6 +36,7 @@ export const transactions = pgTable(
     walletId: integer("wallet_id"),
     walletTujuanId: integer("wallet_tujuan_id"),
     categoryId: integer("category_id"),
+    debtId: integer("debt_id"),
     catatan: text("catatan").notNull().default(""),
     tags: text("tags").array().notNull().default([]),
     attachmentUrl: text("attachment_url"),

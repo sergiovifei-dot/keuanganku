@@ -18,6 +18,20 @@ function revAll() {
 }
 type Result = { ok: true } | { ok: false; error: string };
 
+// Hitung ulang status hutang/piutang berdasarkan pembayaran manual + transaksi berkategori yang dikaitkan.
+async function refreshDebtStatus(db: ReturnType<typeof getDb>, debtId: number) {
+  const debt = (await db.select().from(debts).where(eq(debts.id, debtId)))[0];
+  if (!debt) return;
+  const pays = await db.select().from(debtPayments).where(eq(debtPayments.debtId, debtId));
+  const linked = await db.select().from(transactions).where(eq(transactions.debtId, debtId));
+  const totalBayar = pays.reduce((a, b) => a + b.jumlah, 0) + linked.reduce((a, b) => a + b.jumlah, 0);
+  const outstanding = debt.jumlahPokok - totalBayar;
+  let status = debt.status;
+  if (outstanding <= 0) status = "lunas";
+  else if (debt.status === "lunas") status = "aktif"; // dibuka lagi bila pembayaran dibatalkan
+  if (status !== debt.status) await db.update(debts).set({ status }).where(eq(debts.id, debtId));
+}
+
 // ---------------- Transaksi ----------------
 export async function simpanTransaksi(raw: unknown): Promise<Result> {
   await wajibSecret();
@@ -25,11 +39,13 @@ export async function simpanTransaksi(raw: unknown): Promise<Result> {
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Data tidak valid" };
   const d = p.data;
   const db = getDb();
+  const debtId = d.tipe === "transfer" ? null : (d.debtId ?? null);
   await db.insert(transactions).values({
     tanggal: d.tanggal, tipe: d.tipe, jumlah: d.jumlah,
     walletId: d.walletId, walletTujuanId: d.tipe === "transfer" ? d.walletTujuanId! : null,
-    categoryId: d.tipe === "transfer" ? null : d.categoryId!, catatan: d.catatan, tags: d.tags,
+    categoryId: d.tipe === "transfer" ? null : d.categoryId!, debtId, catatan: d.catatan, tags: d.tags,
   });
+  if (debtId) await refreshDebtStatus(db, debtId);
   revAll();
   return { ok: true };
 }
@@ -39,18 +55,25 @@ export async function updateTransaksi(id: number, raw: unknown): Promise<Result>
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Data tidak valid" };
   const d = p.data;
   const db = getDb();
+  const prev = (await db.select().from(transactions).where(eq(transactions.id, id)))[0];
+  const debtId = d.tipe === "transfer" ? null : (d.debtId ?? null);
   await db.update(transactions).set({
     tanggal: d.tanggal, tipe: d.tipe, jumlah: d.jumlah, walletId: d.walletId,
     walletTujuanId: d.tipe === "transfer" ? d.walletTujuanId! : null,
-    categoryId: d.tipe === "transfer" ? null : d.categoryId!, catatan: d.catatan, tags: d.tags,
+    categoryId: d.tipe === "transfer" ? null : d.categoryId!, debtId, catatan: d.catatan, tags: d.tags,
     updatedAt: new Date(),
   }).where(eq(transactions.id, id));
+  if (prev?.debtId && prev.debtId !== debtId) await refreshDebtStatus(db, prev.debtId);
+  if (debtId) await refreshDebtStatus(db, debtId);
   revAll();
   return { ok: true };
 }
 export async function hapusTransaksi(id: number): Promise<Result> {
   await wajibSecret();
-  await getDb().delete(transactions).where(eq(transactions.id, id));
+  const db = getDb();
+  const prev = (await db.select().from(transactions).where(eq(transactions.id, id)))[0];
+  await db.delete(transactions).where(eq(transactions.id, id));
+  if (prev?.debtId) await refreshDebtStatus(db, prev.debtId);
   revAll();
   return { ok: true };
 }

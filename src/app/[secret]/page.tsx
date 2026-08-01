@@ -57,6 +57,7 @@ export default async function Dashboard({ params }: { params: Promise<{ secret: 
   // Hutang & piutang
   const payByDebt = new Map<number, number[]>();
   for (const p of payments) { const arr = payByDebt.get(p.debtId) ?? []; arr.push(p.jumlah); payByDebt.set(p.debtId, arr); }
+  for (const t of all) { if (t.debtId) { const arr = payByDebt.get(t.debtId) ?? []; arr.push(t.jumlah); payByDebt.set(t.debtId, arr); } }
   const aktifDebts = debts.filter((d) => d.status !== "lunas");
   const outHutang = aktifDebts.filter((d) => d.tipe === "hutang").reduce((a, d) => a + ringkasHutang(d.jumlahPokok, payByDebt.get(d.id) ?? []).outstanding, 0);
   const outPiutang = aktifDebts.filter((d) => d.tipe === "piutang").reduce((a, d) => a + ringkasHutang(d.jumlahPokok, payByDebt.get(d.id) ?? []).outstanding, 0);

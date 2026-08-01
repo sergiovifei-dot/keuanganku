@@ -8,7 +8,7 @@ import {
   Plus, Moon, Sun, Menu, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AddTransaction, type WOpt, type COpt } from "@/components/add-transaction";
+import { AddTransaction, type WOpt, type COpt, type DOpt } from "@/components/add-transaction";
 
 const NAV = [
   { href: "", label: "Dashboard", icon: LayoutDashboard },
@@ -34,7 +34,7 @@ function ThemeToggle() {
   );
 }
 
-export function Shell({ secret, wallets, categories, children }: { secret: string; wallets: WOpt[]; categories: COpt[]; children: React.ReactNode }) {
+export function Shell({ secret, wallets, categories, debts, children }: { secret: string; wallets: WOpt[]; categories: COpt[]; debts: DOpt[]; children: React.ReactNode }) {
   const path = usePathname();
   const base = `/${secret}`;
   const [add, setAdd] = useState(false);
@@ -112,7 +112,7 @@ export function Shell({ secret, wallets, categories, children }: { secret: strin
         {MOBILE.slice(2).map((n) => <TabItem key={n.href} base={base} n={n} active={isActive(n.href)} />)}
       </nav>
 
-      {add && <AddTransaction secret={secret} wallets={wallets} categories={categories} onClose={() => setAdd(false)} />}
+      {add && <AddTransaction secret={secret} wallets={wallets} categories={categories} debts={debts} onClose={() => setAdd(false)} />}
     </div>
   );
 }

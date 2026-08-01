@@ -6,17 +6,17 @@ import { formatRupiah } from "@/lib/format";
 import { fmtTanggalPendek } from "@/lib/dates";
 import { colorHex } from "@/lib/colors";
 import { Card, Badge, EmptyState } from "@/components/ui";
-import { AddTransaction, type WOpt, type COpt, type EditTx } from "@/components/add-transaction";
+import { AddTransaction, type WOpt, type COpt, type DOpt, type EditTx } from "@/components/add-transaction";
 import { hapusTransaksi, simpanTransaksi } from "@/lib/actions";
 
 type Tx = {
   id: number; tanggal: string; tipe: "income" | "expense" | "transfer"; jumlah: number;
-  walletId: number | null; walletTujuanId: number | null; categoryId: number | null; catatan: string; tags: string[];
+  walletId: number | null; walletTujuanId: number | null; categoryId: number | null; catatan: string; tags: string[]; debtId: number | null;
 };
 type Filters = { start?: string; end?: string; walletId?: string; categoryId?: string; tipe?: string; q?: string; page: number };
 
-export function TransaksiClient({ secret, txs, wallets, categories, filters, hasMore }: {
-  secret: string; txs: Tx[]; wallets: WOpt[]; categories: COpt[]; filters: Filters; hasMore: boolean;
+export function TransaksiClient({ secret, txs, wallets, categories, debts, filters, hasMore }: {
+  secret: string; txs: Tx[]; wallets: WOpt[]; categories: COpt[]; debts: DOpt[]; filters: Filters; hasMore: boolean;
 }) {
   const router = useRouter();
   const base = `/${secret}/transaksi`;
@@ -42,7 +42,7 @@ export function TransaksiClient({ secret, txs, wallets, categories, filters, has
   }
   function dup(t: Tx) {
     start(async () => {
-      await simpanTransaksi({ tanggal: t.tanggal, tipe: t.tipe, jumlah: t.jumlah, walletId: t.walletId ?? 0, walletTujuanId: t.walletTujuanId, categoryId: t.categoryId, catatan: t.catatan, tags: t.tags });
+      await simpanTransaksi({ tanggal: t.tanggal, tipe: t.tipe, jumlah: t.jumlah, walletId: t.walletId ?? 0, walletTujuanId: t.walletTujuanId, categoryId: t.categoryId, debtId: t.debtId, catatan: t.catatan, tags: t.tags });
       router.refresh();
     });
   }
@@ -99,7 +99,7 @@ export function TransaksiClient({ secret, txs, wallets, categories, filters, has
                   {t.tipe === "income" ? "+" : t.tipe === "expense" ? "−" : ""}{formatRupiah(t.jumlah)}
                 </span>
                 <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <button aria-label="Ubah" onClick={() => setEdit({ id: t.id, tipe: t.tipe, jumlah: t.jumlah, walletId: t.walletId, walletTujuanId: t.walletTujuanId, categoryId: t.categoryId, tanggal: t.tanggal, catatan: t.catatan })} className="rounded p-1.5 hover:bg-muted"><Pencil size={14} /></button>
+                  <button aria-label="Ubah" onClick={() => setEdit({ id: t.id, tipe: t.tipe, jumlah: t.jumlah, walletId: t.walletId, walletTujuanId: t.walletTujuanId, categoryId: t.categoryId, tanggal: t.tanggal, catatan: t.catatan, debtId: t.debtId })} className="rounded p-1.5 hover:bg-muted"><Pencil size={14} /></button>
                   <button aria-label="Duplikat" onClick={() => dup(t)} className="rounded p-1.5 hover:bg-muted"><Copy size={14} /></button>
                   <button aria-label="Hapus" onClick={() => del(t.id)} className="rounded p-1.5 text-expense hover:bg-expense/10"><Trash2 size={14} /></button>
                 </div>
@@ -117,7 +117,7 @@ export function TransaksiClient({ secret, txs, wallets, categories, filters, has
         </div>
       )}
 
-      {edit && <AddTransaction secret={secret} wallets={wallets} categories={categories} edit={edit} onClose={() => setEdit(null)} />}
+      {edit && <AddTransaction secret={secret} wallets={wallets} categories={categories} debts={debts} edit={edit} onClose={() => setEdit(null)} />}
       {pending && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-xs text-background md:bottom-6">Menyimpan…</div>}
     </div>
   );

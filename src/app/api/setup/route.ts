@@ -21,6 +21,8 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS goal_contributions (id serial PRIMARY KEY, goal_id integer NOT NULL, tanggal date NOT NULL, jumlah bigint NOT NULL, wallet_id integer)`,
   `CREATE TABLE IF NOT EXISTS recurring_transactions (id serial PRIMARY KEY, nama text NOT NULL, tipe text NOT NULL, jumlah bigint NOT NULL, category_id integer, wallet_id integer, frekuensi text NOT NULL DEFAULT 'bulanan', tanggal_mulai date NOT NULL, tanggal_berakhir date, tanggal_eksekusi_berikutnya date NOT NULL, is_active boolean NOT NULL DEFAULT true)`,
   `CREATE TABLE IF NOT EXISTS settings (id serial PRIMARY KEY, mata_uang text NOT NULL DEFAULT 'IDR', awal_periode_bulan integer NOT NULL DEFAULT 1, tema text NOT NULL DEFAULT 'system', pin_hash text, pin_aktif boolean NOT NULL DEFAULT false)`,
+  // Migrasi kolom baru (aman dijalankan berulang):
+  `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS debt_id integer`,
 ];
 
 const DOMPET = [

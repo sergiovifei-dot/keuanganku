@@ -10,6 +10,7 @@ export const transaksiSchema = z
     walletId: z.number().int().positive("Pilih dompet"),
     walletTujuanId: z.number().int().positive().nullable().optional(),
     categoryId: z.number().int().positive().nullable().optional(),
+    debtId: z.number().int().positive().nullable().optional(),
     catatan: z.string().max(500).optional().default(""),
     tags: z.array(z.string()).optional().default([]),
   })
